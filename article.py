@@ -3,20 +3,45 @@ import numpy as np
 import networkx as nx
 import nearmincut as nmc
 import matplotlib.pyplot as plt
+from pymatgen.core import Structure
 
+def get_space_distro_matrix(filename):
+    """
+    Input: Nombre del archivo .cif de la estructura
+    Output: dataframe de la distribucion en el espacio de los atomos
+    """
+    material = Structure.from_file(filename).as_dict()
+    df = pd.DataFrame()
+    atoms, a, b, c = [], [], [], []
+    for d in material['sites']:
+        atoms.append(d['label'])
+        space_distro = d['abc'] #d['xyz']
+        a.append(space_distro[0])
+        b.append(space_distro[1])
+        c.append(space_distro[2])
+    df['Atom'], df['a'], df['b'], df['c']  = atoms, a, b, c
+    return df
 
 def space_euclidean_distance(p1, p2):
+    """
+    Input: 2 puntos
+    Output: Distancia euclidania entre esos 2 puntos
+    """
     dist = np.sqrt(np.sum((p1-p2)**2, axis=0))
     return dist
 
 def get_cut_edges(G, partition):
-    H1 = G.subgraph(partition[0])
-    H2 = G.subgraph(partition[1])
+    """
+    Input: G es el grafo del material. Partition es la 2-particion (X, Y con X intersec Y = vacio) de nodos que genera el algoritmo min_cut
+    Output: lista de arcos que se deben eliminar con la 2-particion dada
+    """
+    H1 = G.subgraph(partition[0]) #subgrafo inducido por el subconjunto X de la particion
+    H2 = G.subgraph(partition[1]) #subgrafo inducido por el subconjunto Y de la particion
     G2 = nx.Graph()
-    G2.add_nodes_from(G.nodes)
+    G2.add_nodes_from(G.nodes) #se crea un grafo a partir de los subgrafos inducidos
     G2.add_edges_from(H1.edges)
     G2.add_edges_from(H2.edges)
-    R = nx.difference(G, G2)
+    R = nx.difference(G, G2) #los arcos del grafos G-G2 son los arcos que se deben eliminar con la 2-particion dada
     cut_edges = list(R.edges())
     return cut_edges
 
@@ -56,7 +81,9 @@ def plot_3d_graph(G, df, color_set, plot_cut, cut_edges=None):
     plt.show()
     return
 
-df = pd.read_csv('data.csv', sep=';')
+#df = pd.read_csv('data.csv', sep=';')
+filename = 'MgTiO3_conventional_standard.cif'
+df = get_space_distro_matrix(filename)
 
 #Distances
 color_set = {'Mg': 'green', 'Ti':'blue', 'O':'yellow'}
@@ -81,7 +108,7 @@ for i in range(N):
     max_dist = max(distances[i].values())
     d = np.mean(list(distances[i].values()))
     for key, value in distances[i].items():
-        if value <= d:
+        if value <= d: #metrica para la conexion de 2 atomos
             G.add_edge(i, key, capacity=value)
 
 #Plot graph in 2D
