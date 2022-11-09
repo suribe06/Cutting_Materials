@@ -4,6 +4,7 @@ import networkx as nx
 import nearmincut as nmc
 import matplotlib.pyplot as plt
 from pymatgen.core import Structure
+from matplotlib.animation import FuncAnimation, PillowWriter, FFMpegWriter
 
 def get_space_distro_matrix(filename):
     """
@@ -53,14 +54,14 @@ def plot_2d_graph(G, df, color_map):
     plt.show()
     return
 
-def plot_3d_graph(G, df, color_set, plot_cut, cut_edges=None):
+def plot_3d_graph(material_name, G, df, color_set, plot_cut, cut_edges=None):
     fig = plt.figure(constrained_layout=True)
     ax = fig.add_subplot(projection="3d")
 
     for index, row in df.iterrows():
         x, y, z = row['a'], row['b'], row['c']
         atom = row['Atom']
-        ax.scatter(x, y, z, color=color_set[atom], label=atom)
+        ax.scatter(x, y, z, color=color_set[atom], label=atom, s=100)
 
     for e in G.edges():
         u, v = e[0], e[1]
@@ -78,10 +79,18 @@ def plot_3d_graph(G, df, color_set, plot_cut, cut_edges=None):
     ax.set_ylabel('y-axis')
     ax.set_zlabel('z-axis')
     ax.legend(by_label.values(), by_label.keys(), loc='best')
+    plt.title(f'{material_name} Graph Representation')
+
+    #Animation plot
+    def animate(frame):
+        ax.view_init(30, frame/4)
+        return fig
+    #ani = FuncAnimation(fig, animate, interval=100, frames=200)    
+    #ani.save("material.gif", dpi=300, writer=PillowWriter(fps=25))
+    #ani.save("material.mov", dpi=300, writer=FFMpegWriter(fps=25))
     plt.show()
     return
 
-#df = pd.read_csv('data.csv', sep=';')
 filename = 'MgTiO3_conventional_standard.cif'
 df = get_space_distro_matrix(filename)
 
@@ -108,7 +117,7 @@ for i in range(N):
     max_dist = max(distances[i].values())
     d = np.mean(list(distances[i].values()))
     for key, value in distances[i].items():
-        if value <= d: #metrica para la conexion de 2 atomos
+        if value <= 0.5: #metrica para la conexion de 2 atomos
             G.add_edge(i, key, capacity=value)
 
 #Plot graph in 2D
@@ -129,5 +138,6 @@ cut_edges = sol[0][1]
 """
 
 #Plot graph in 3D
-plot_3d_graph(G, df, color_set, False)
-plot_3d_graph(G, df, color_set, True, cut_edges)
+material_name = 'Magnesium Titanium Oxide (MgTiO3)'
+#plot_3d_graph(material_name, G, df, color_set, False)
+plot_3d_graph(material_name, G, df, color_set, True, cut_edges)
