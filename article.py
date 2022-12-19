@@ -6,22 +6,14 @@ import matplotlib.pyplot as plt
 from pymatgen.core import Structure
 from matplotlib.animation import FuncAnimation, PillowWriter, FFMpegWriter
 
-def get_space_distro_matrix(filename):
+def get_space_distro_matrix(structure):
     """
     Input: Nombre del archivo .cif de la estructura
     Output: dataframe de la distribucion en el espacio de los atomos
     """
-    material = Structure.from_file(filename).as_dict()
-    df = pd.DataFrame()
-    atoms, a, b, c = [], [], [], []
-    for d in material['sites']:
-        atoms.append(d['label'])
-        space_distro = d['abc'] #d['xyz']
-        a.append(space_distro[0])
-        b.append(space_distro[1])
-        c.append(space_distro[2])
-    df['Atom'], df['a'], df['b'], df['c']  = atoms, a, b, c
-    return df
+    material = structure.as_dataframe()
+    material = material.drop(['x', 'y', 'z'], axis=1)
+    return material
 
 def space_euclidean_distance(p1, p2):
     """
@@ -48,19 +40,19 @@ def get_cut_edges(G, partition):
 
 def plot_2d_graph(G, df, color_map):
     pos = nx.circular_layout(G)
-    nx.draw(G, pos, labels={node: df['Atom'].to_list()[node] for node in G.nodes()}, node_color=color_map)
+    nx.draw(G, pos, labels={node: df['Species'].to_list()[node] for node in G.nodes()}, node_color=color_map)
     labels={(x[0], x[1]) : round(x[2], 4) for x in list(G.edges.data("capacity"))}
     nx.draw_networkx_edge_labels(G, pos, edge_labels=labels, font_color='red', font_size=7)
     plt.show()
     return
 
 def plot_3d_graph(material_name, G, df, color_set, plot_cut, cut_edges=None):
-    fig = plt.figure(constrained_layout=True)
+    fig = plt.figure()
     ax = fig.add_subplot(projection="3d")
 
     for index, row in df.iterrows():
         x, y, z = row['a'], row['b'], row['c']
-        atom = row['Atom']
+        atom = row['Species']
         ax.scatter(x, y, z, color=color_set[atom], label=atom, s=100)
 
     for e in G.edges():
@@ -79,8 +71,9 @@ def plot_3d_graph(material_name, G, df, color_set, plot_cut, cut_edges=None):
     ax.set_ylabel('y-axis')
     ax.set_zlabel('z-axis')
     ax.legend(by_label.values(), by_label.keys(), loc='best')
-    plt.title(f'{material_name} Graph Representation')
-
+    plt.title(f'{material_name}')
+    txt = 'Atomic Spatial Representation Graph and Material Cutoff Points'
+    #fig.text(.5, .05, txt, ha='center')
     #Animation plot
     def animate(frame):
         ax.view_init(30, frame/4)
@@ -91,15 +84,18 @@ def plot_3d_graph(material_name, G, df, color_set, plot_cut, cut_edges=None):
     plt.show()
     return
 
-filename = 'MgTiO3_conventional_standard.cif'
-df = get_space_distro_matrix(filename)
+filename = "CrN.cif"
+structure = Structure.from_file(filename) #unit cell
+super_cell = structure.copy()
+super_cell.make_supercell([2,2,2])
+df = get_space_distro_matrix(super_cell)
 
 #Distances
-color_set = {'Mg': 'green', 'Ti':'blue', 'O':'yellow'}
+color_set = dict(zip(df['Species'].unique(), ['purple', 'yellow']))
 color_map = []
 distances = []
 for i, row in df.iterrows():
-    color_map.append(color_set[row['Atom']])
+    color_map.append(color_set[row['Species']])
     p1 = np.array([row['a'], row['b'], row['c']])
     dist_i = {}
     for j, row2 in df.iterrows():
@@ -117,14 +113,14 @@ for i in range(N):
     max_dist = max(distances[i].values())
     d = np.mean(list(distances[i].values()))
     for key, value in distances[i].items():
-        if value <= 0.5: #metrica para la conexion de 2 atomos
+        if value <= 0.3: #metrica para la conexion de 2 atomos
             G.add_edge(i, key, capacity=value)
 
 #Plot graph in 2D
 #plot_2d_graph(G, df, color_map)
 
 #Max-flow min-cut networkx
-s, t = 0, 2
+s, t = 0, 1
 cut_value, partition = nx.minimum_cut(G, s, t)
 print(cut_value)
 cut_edges = get_cut_edges(G, partition)
@@ -138,6 +134,6 @@ cut_edges = sol[0][1]
 """
 
 #Plot graph in 3D
-material_name = 'Magnesium Titanium Oxide (MgTiO3)'
-#plot_3d_graph(material_name, G, df, color_set, False)
-plot_3d_graph(material_name, G, df, color_set, True, cut_edges)
+material_name = 'CrN'
+plot_3d_graph(material_name, G, df, color_set, False)
+#plot_3d_graph(material_name, G, df, color_set, True, cut_edges)
