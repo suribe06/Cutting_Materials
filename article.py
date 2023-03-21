@@ -72,8 +72,10 @@ def createEnergyGraph(cartesian_coords, df, label_set):
         G.nodes[i]["Species"] = label_set[site.species]
     for i in range(N):
         for j in range(i+1, N):
-            G.add_edge(i, j, capacity=energy_matrix[i,j])
-            G.add_edge(j, i, capacity=energy_matrix[i,j])
+            G.add_edge(i, j, capacity=energy_matrix[i,j], distance=distances[i,j])
+            G.add_edge(j, i, capacity=energy_matrix[i,j], distance=distances[i,j])
+    #nx.write_graphml(G, "energy_graph.graphml")
+    #nx.write_gml(G, "energy_graph.gml")
     return G
 
 def getCutEdges(G, partition):
@@ -84,7 +86,7 @@ def getCutEdges(G, partition):
     H1 = G.subgraph(partition[0])  # subgrafo inducido por el subconjunto X de la particion
     # subgrafo inducido por el subconjunto Y de la particion
     H2 = G.subgraph(partition[1])
-    G2 = nx.Graph()
+    G2 = nx.DiGraph()
     # se crea un grafo a partir de los subgrafos inducidos
     G2.add_nodes_from(G.nodes)
     G2.add_edges_from(H1.edges)
@@ -152,21 +154,18 @@ G2 = createDistanceGraph(cartesian_coords, label_set)
 plotGraph3D(G2, cartesian_coords, color_set, False)
 
 # Create graph using energy
-#G3 = createEnergyGraph(cartesian_coords, df, label_set)
+G3 = createEnergyGraph(cartesian_coords, df, label_set)
 #plotGraph3D(G3, cartesian_coords, color_set, False)
 
-"""
 # Max-flow min-cut networkx
-s, t = 0, 1
-cut_value, partition = nx.minimum_cut(G2, s, t)
+source, target = 0, 1
+cut_value, partition = nx.minimum_cut(G2, source, target)
 print(cut_value)
 cut_edges = getCutEdges(G2, partition)
-
 plotGraph3D(G2, cartesian_coords, color_set, True, cut_edges)
 
 #near Max-flow min-cut
-kwargs={'eps':0.125}
-s, t = 0, 2
-sol = nmc.near_min_cuts(G,s,t,**kwargs)
-cut_edges = sol[0][1]
-"""
+#kwargs={'eps':0.125}
+#s, t = 0, 2
+#sol = nmc.near_min_cuts(G,s,t,**kwargs)
+#cut_edges = sol[0][1]
