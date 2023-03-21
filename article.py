@@ -4,7 +4,6 @@ import networkx as nx
 import nearmincut as nmc
 import matplotlib.pyplot as plt
 from pymatgen.core import Structure
-from matplotlib.animation import FuncAnimation, PillowWriter, FFMpegWriter
 from interpo import energyFunctionCrN, energyFunctionCrCr, energyFunctionNN
 
 def euclidean_distance(p1, p2):
@@ -55,9 +54,29 @@ def createEnergyGraph(cartesian_coords, df, label_set):
     N = len(cartesian_coords)
     energy_matrix = np.zeros((N, N), dtype=float)
     distances = getDistanceMatrix(cartesian_coords)
-    return
+    f = energyFunctionCrCr()
+    g = energyFunctionNN()
+    h = energyFunctionCrN()
+    for i in range(N):
+        for j in range(i+1, N):
+            species_i = label_set[df.iloc[i]['Species']]
+            species_j = label_set[df.iloc[j]['Species']]
+            distance = distances[i,j]
+            if species_i == 'Cr' and species_j == 'Cr': energy = f(distance)
+            elif species_i == 'N' and species_j == 'N': energy = g(distance)
+            else: energy = h(distance)
+            energy_matrix[i,j] = energy_matrix[j,i] = energy
+    G = nx.DiGraph()
+    for i, site in enumerate(super_cell):
+        G.add_node(i)
+        G.nodes[i]["Species"] = label_set[site.species]
+    for i in range(N):
+        for j in range(i+1, N):
+            G.add_edge(i, j, capacity=energy_matrix[i,j])
+            G.add_edge(j, i, capacity=energy_matrix[i,j])
+    return G
 
-def get_cut_edges(G, partition):
+def getCutEdges(G, partition):
     """
     Input: G es el grafo del material. Partition es la 2-particion (X, Y con X intersec Y = vacio) de nodos que genera el algoritmo min_cut
     Output: lista de arcos que se deben eliminar con la 2-particion dada
@@ -75,18 +94,7 @@ def get_cut_edges(G, partition):
     cut_edges = list(R.edges())
     return cut_edges
 
-def plot_2d_graph(G, df, color_map):
-    pos = nx.circular_layout(G)
-    nx.draw(G, pos, labels={node: df['Species'].to_list()[
-            node] for node in G.nodes()}, node_color=color_map)
-    labels = {(x[0], x[1]): round(x[2], 4)
-              for x in list(G.edges.data("capacity"))}
-    nx.draw_networkx_edge_labels(
-        G, pos, edge_labels=labels, font_color='red', font_size=7)
-    plt.show()
-    return
-
-def plot_3d_graph(G, cartesian_coords, color_set, plot_cut, cut_edges=None):
+def plotGraph3D(G, cartesian_coords, color_set, plot_cut, cut_edges=None):
     coord_x, coord_y, coord_z = map(list, zip(*cartesian_coords))
     label_atoms = list(nx.get_node_attributes(G, "Species").values())
     fig = plt.figure()
@@ -95,8 +103,12 @@ def plot_3d_graph(G, cartesian_coords, color_set, plot_cut, cut_edges=None):
     for x, y, z, l in zip(coord_x, coord_y, coord_z, label_atoms):
         ax.scatter(x, y, z, label=l, color=color_set[l], s=100)
     # Plot edges
-    for e in G.edges():
-        u, v = e[0], e[1]
+    plotted_edges = set()
+    edges = G.edges()
+    for u, v in edges:
+        # Check if the edge has been plotted in the opposite direction
+        if (v, u) in plotted_edges:
+            continue
         x_i = [coord_x[u], coord_x[v]]
         y_i = [coord_y[u], coord_y[v]]
         z_i = [coord_z[u], coord_z[v]]
@@ -105,6 +117,7 @@ def plot_3d_graph(G, cartesian_coords, color_set, plot_cut, cut_edges=None):
             if (u, v) in cut_edges or (v, u) in cut_edges:
                 color = 'red'
         ax.plot3D(x_i, y_i, z_i, color=color, linewidth=0.5)
+        plotted_edges.add((u, v))
     # Set the axis labels
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
@@ -128,7 +141,7 @@ color_set = dict(zip(['Cr', 'N'], ['purple', 'yellow']))
 # Plot graph (spherical neighborhood)
 #G1 = createSphericalNeighborhoodGraph(super_cell)
 #d = nx.get_node_attributes(G1, "position")
-#plot_3d_graph(G1, d.values(), color_set, False)
+#plotGraph3D(G1, d.values(), color_set, False)
 
 # Create graph using euclidean distance
 lattice = super_cell.lattice
@@ -136,19 +149,20 @@ fractional_coords = super_cell.frac_coords
 # Convert the fractional coordinates to Cartesian coordinates using the lattice vectors
 cartesian_coords = lattice.get_cartesian_coords(fractional_coords)
 G2 = createDistanceGraph(cartesian_coords, label_set)
-plot_3d_graph(G2, cartesian_coords, color_set, False)
+plotGraph3D(G2, cartesian_coords, color_set, False)
 
 # Create graph using energy
-#createEnergyGraph(cartesian_coords, df, label_set)
+#G3 = createEnergyGraph(cartesian_coords, df, label_set)
+#plotGraph3D(G3, cartesian_coords, color_set, False)
 
 """
 # Max-flow min-cut networkx
 s, t = 0, 1
 cut_value, partition = nx.minimum_cut(G2, s, t)
 print(cut_value)
-cut_edges = get_cut_edges(G2, partition)
+cut_edges = getCutEdges(G2, partition)
 
-plot_3d_graph(G2, cartesian_coords, color_set, True, cut_edges)
+plotGraph3D(G2, cartesian_coords, color_set, True, cut_edges)
 
 #near Max-flow min-cut
 kwargs={'eps':0.125}
