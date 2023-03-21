@@ -5,11 +5,57 @@ import nearmincut as nmc
 import matplotlib.pyplot as plt
 from pymatgen.core import Structure
 from matplotlib.animation import FuncAnimation, PillowWriter, FFMpegWriter
-
+from interpo import energyFunctionCrN, energyFunctionCrCr, energyFunctionNN
 
 def euclidean_distance(p1, p2):
     dist = np.sqrt(np.sum((p1-p2)**2, axis=0))
     return dist
+
+def getDistanceMatrix(cartesian_coords):
+    N = len(cartesian_coords)
+    distances = np.zeros((N,N))
+    for i in range(N):
+        for j in range(i, N):
+            p1 = cartesian_coords[i]
+            p2 = cartesian_coords[j]
+            distances[i][j] = distances[j][i] = euclidean_distance(p1, p2)
+    return distances
+
+def createSphericalNeighborhoodGraph(super_cell):
+    # Create graph given a spherical neighborhood
+    G = nx.Graph()
+    for i, site in enumerate(super_cell):
+        G.add_node(i)
+        G.nodes[i]["Species"] = label_set[site.species]
+    radius = 3
+    for i, site in enumerate(super_cell):
+        neighbors = [(n.index, n.nn_distance) for n in super_cell.get_neighbors(site, r=radius)]
+        for n in neighbors:
+            G.add_edge(i, n[0], weight=n[1])
+    return G
+
+def createDistanceGraph(cartesian_coords, label_set):
+    cutoff_distance = 2.5  # Umbral de distancia para conexión
+    N = len(cartesian_coords)
+    distances = getDistanceMatrix(cartesian_coords)
+    G = nx.DiGraph()
+    for i, site in enumerate(super_cell):
+        G.add_node(i)
+        G.nodes[i]["Species"] = label_set[site.species]
+    for i in range(N):
+        for j in range(i+1, N):
+            dist = distances[i][j]
+            if dist <= cutoff_distance:  # metric for connection of 2 atoms
+                eV = 9.462 #energy between nearest atoms
+                G.add_edge(i, j, capacity=eV, distance=dist)
+                G.add_edge(j, i, capacity=eV, distance=dist)
+    return G
+
+def createEnergyGraph(cartesian_coords, df, label_set):
+    N = len(cartesian_coords)
+    energy_matrix = np.zeros((N, N), dtype=float)
+    distances = getDistanceMatrix(cartesian_coords)
+    return
 
 def get_cut_edges(G, partition):
     """
@@ -79,51 +125,23 @@ df = super_cell.as_dataframe()
 label_set = dict(zip(df['Species'].unique(), ['Cr', 'N']))
 color_set = dict(zip(['Cr', 'N'], ['purple', 'yellow']))
 
-# Create graph given a spherical neighborhood
-G = nx.Graph()
-for i, site in enumerate(super_cell):
-    G.add_node(i)
-    G.nodes[i]["Species"] = label_set[site.species]
-    G.nodes[i]["position"] = (site.x, site.y, site.z)
-
-for i, site in enumerate(super_cell):
-    neighbors = [(n.index, n.nn_distance)
-                 for n in super_cell.get_neighbors(site, r=3)]
-    for n in neighbors:
-        G.add_edge(i, n[0], weight=n[1])
-
 # Plot graph (spherical neighborhood)
-d = nx.get_node_attributes(G, "position")
-plot_3d_graph(G, d.values(), color_set, False)
+#G1 = createSphericalNeighborhoodGraph(super_cell)
+#d = nx.get_node_attributes(G1, "position")
+#plot_3d_graph(G1, d.values(), color_set, False)
 
 # Create graph using euclidean distance
 lattice = super_cell.lattice
 fractional_coords = super_cell.frac_coords
 # Convert the fractional coordinates to Cartesian coordinates using the lattice vectors
 cartesian_coords = lattice.get_cartesian_coords(fractional_coords)
-distances = []
-N = len(cartesian_coords)
-for i in range(N):
-    p1 = cartesian_coords[i]
-    dist_i = {}
-    for j in range(N):
-        p2 = cartesian_coords[j]
-        if j != i:
-            dist_i[j] = euclidean_distance(p1, p2)
-    distances.append(dist_i)
-
-G2 = nx.Graph()
-for i, site in enumerate(super_cell):
-    G2.add_node(i)
-    G2.nodes[i]["Species"] = label_set[site.species]
-for i in range(N):
-    for key, value in distances[i].items():
-        if value <= 2.5:  # metric for connection of 2 atoms
-            eV = 9.462 #energy between nearest atoms
-            G2.add_edge(i, key, capacity=value)
-
+G2 = createDistanceGraph(cartesian_coords, label_set)
 plot_3d_graph(G2, cartesian_coords, color_set, False)
 
+# Create graph using energy
+#createEnergyGraph(cartesian_coords, df, label_set)
+
+"""
 # Max-flow min-cut networkx
 s, t = 0, 1
 cut_value, partition = nx.minimum_cut(G2, s, t)
@@ -131,7 +149,7 @@ print(cut_value)
 cut_edges = get_cut_edges(G2, partition)
 
 plot_3d_graph(G2, cartesian_coords, color_set, True, cut_edges)
-"""
+
 #near Max-flow min-cut
 kwargs={'eps':0.125}
 s, t = 0, 2
