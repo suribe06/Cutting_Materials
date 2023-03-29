@@ -3,6 +3,7 @@ from scipy import interpolate
 import matplotlib.pyplot as plt
 
 eV_factor = 13.6056980658938
+max_xvalue = 11
 
 def energyFunctionCrN():
     # Load data from .dat file
@@ -12,7 +13,7 @@ def energyFunctionCrN():
     # Create an interpolation function for interaction potential between Cr and N atoms
     f = interpolate.interp1d(x_CrN, y_CrN, kind='cubic', fill_value="extrapolate")
     def new_f(x):
-        return f(x) - f(7)
+        return f(x) - f(max_xvalue)
     return new_f
 
 def energyFunctionCrCr():
@@ -23,7 +24,7 @@ def energyFunctionCrCr():
     # Create an interpolation function for interaction potential between Cr atoms
     g = interpolate.interp1d(x_CrCr, y_CrCr, kind='cubic', fill_value="extrapolate")
     def new_g(x):
-        return g(x) - g(7)
+        return g(x) - g(max_xvalue)
     return new_g
 
 def energyFunctionNN():
@@ -34,11 +35,11 @@ def energyFunctionNN():
     # Create an interpolation function for interaction potential between N atoms
     h = interpolate.interp1d(x_NN, y_NN, kind='cubic', fill_value="extrapolate")
     def new_h(x):
-        return h(x) - h(7)
+        return h(x) - h(max_xvalue)
     return new_h
 
 def testMethod():
-    x_values = np.linspace(1, 7, 500)
+    x_values = np.linspace(1, max_xvalue, 500)
     f = energyFunctionCrN()
     g = energyFunctionCrCr()
     h = energyFunctionNN()
